@@ -2,6 +2,7 @@ import pandas as pd
 import streamlit as st
 from io import BytesIO
 import openpyxl
+from streamlit_modal import Modal
 
 # 配置页面样式
 st.set_page_config(
@@ -248,6 +249,18 @@ def main():
         st.session_state.new_configs = []
     if 'execution_success' not in st.session_state:
         st.session_state.execution_success = False
+    if 'success_modal_open' not in st.session_state:
+        st.session_state.success_modal_open = False
+    if 'success_confirmed' not in st.session_state:
+        st.session_state.success_confirmed = False
+    
+    # 定义成功弹窗
+    success_modal = Modal(title="操作成功", key="success_modal_key", max_width=500)
+    
+    # 回调函数，将session_state置为True
+    def confirm_success():
+        st.session_state.success_confirmed = True
+        st.session_state.success_modal_open = False
     
     # 加载数据
     supplier_df, model_suppliers_df, model_configs_df = load_data()
@@ -628,7 +641,7 @@ def main():
                                 
                                 new_config = original_config.copy()
                                 new_config['model'] = new_model_name
-                                new_config['supplier_id'] = supplier_id
+                                # 移除添加supplier_id字段的行，保持原有字段结构
                                 new_configs.append(new_config)
                                 
                                 # 记录新增
@@ -650,10 +663,38 @@ def main():
                     st.session_state.new_configs = new_configs
                     st.session_state.execution_success = True
                     st.session_state.current_step = 4
+                    st.session_state.success_modal_open = True
+                    
                     st.rerun()
                     
                 except Exception as e:
                     st.markdown(f'<div class="error-message">❌ 操作失败: {e}</div>', unsafe_allow_html=True)
+        
+        # 如果执行成功，显示成功弹窗
+        if st.session_state.success_modal_open:
+            with success_modal.container():
+                st.markdown("""
+                    <div style="text-align: center; padding: 1rem;">
+                        <div style="font-size: 3rem; margin-bottom: 1rem;">🎉</div>
+                        <h3 style="color: #2e7d32; margin-bottom: 1rem;">修改成功！</h3>
+                        <p style="color: #666; margin-bottom: 1.5rem;">模型重命名和配置新增已完成</p>
+                        <div style="background-color: #f0f9f0; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; text-align: left;">
+                            <div style="color: #2e7d32; font-weight: 600; margin-bottom: 0.5rem;">✅ 完成操作：</div>
+                            <div style="color: #666; font-size: 0.9rem;">
+                                <div>• 修改了 """ + str(len(filtered_suppliers)) + """ 条 model_suppliers 记录</div>
+                                <div>• 新增了 """ + str(len(st.session_state.new_configs)) + """ 条 model_configs 记录</div>
+                            </div>
+                        </div>
+                    </div>
+                """, unsafe_allow_html=True)
+                
+                # 定义确定按钮，注意key值为指定的session_state，on_click调用回调函数改session_state的值
+                st.button("确定", key="success_confirm", on_click=confirm_success)
+        
+        # 这里通过session_state判断弹窗里的确定按钮被点击了，就进行你想要的逻辑操作。
+        if st.session_state.success_confirmed:
+            st.session_state.success_confirmed = False    # 恢复session_state为False
+            st.rerun()  # 重刷页面
         
         # 显示修改后的数据 - 只在执行完成后显示
         if st.session_state.current_step == 4 and st.session_state.execution_success and st.session_state.new_configs:
